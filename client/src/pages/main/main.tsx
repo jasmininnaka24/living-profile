@@ -25,17 +25,23 @@ type Result = {
 export default function Main() {
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<Result | null>(null);
+  const [chatKey, setChatKey] = useState(0); // remount ChatPanel to clear chats
 
-  const doSearch = async (q: string) => {
+  const doSearch = async (raw: string) => {
+    const nextName = raw.trim();
+    if (!nextName) return;
+
+    const isSame =
+      nextName.toLowerCase() === (result?.name ?? "").trim().toLowerCase();
+
     setStatus("loading");
 
-    const wikiImg = await fetchCharacterImage(q);
+    const wikiImg = await fetchCharacterImage(nextName);
     const avatarUrl = wikiImg ?? unknownAvatar(64);
-
-    const facts = await fetchCharacterFacts(q);
+    const facts = await fetchCharacterFacts(nextName);
 
     setResult({
-      name: q,
+      name: nextName,
       type: "Unknown",
       avatarUrl,
       facts: {
@@ -46,6 +52,7 @@ export default function Main() {
       },
     });
 
+    if (!isSame) setChatKey((k) => k + 1); // clears both tabs by remounting ChatPanel
     setStatus("done");
   };
 
@@ -67,9 +74,11 @@ export default function Main() {
           {/* Right column */}
           <div>
             <ChatPanel
+              key={chatKey}
+              loading={status === "loading"}           // ← add this
               character={
                 status === "done" && result
-                  ? { name: result.name, avatarUrl: result.avatarUrl }   // <-- pass it
+                  ? { name: result.name, avatarUrl: result.avatarUrl }
                   : undefined
               }
             />

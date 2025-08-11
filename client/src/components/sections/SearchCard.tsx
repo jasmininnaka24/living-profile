@@ -1,19 +1,18 @@
 import { useState } from "react";
 import Card from "@/components/ui/Card";
 
-type Props = {
-  loading: boolean;
-  onSearch: (query: string) => void | Promise<void>;
-};
+type Props = { loading?: boolean; onSearch: (q: string) => void };
+
 
 export default function SearchCard({ loading, onSearch }: Props) {
   const [query, setQuery] = useState("");
   const canSearch = !!query.trim() && !loading;
 
-  const handleSearch = () => {
-    if (!canSearch) return;
-    onSearch(query.trim());
-  };
+const handleSearch = () => {
+  const q = query.trim();
+  if (!q) return;
+  onSearch(q);          // parent decides whether to clear or keep
+};
 
   return (
     <Card className="px-6 py-10">
