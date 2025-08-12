@@ -15,6 +15,7 @@ type Result = {
   type: "Unknown" | "Fictional" | "Real";
   avatarUrl: string;
   facts: {
+    background: string;           
     era: string;
     occupation: string;
     works: string[] | null;
@@ -28,33 +29,58 @@ export default function Main() {
   const [chatKey, setChatKey] = useState(0); // remount ChatPanel to clear chats
 
   const doSearch = async (raw: string) => {
-    const nextName = raw.trim();
-    if (!nextName) return;
+  const nextName = raw.trim();
+  if (!nextName) return;
 
-    const isSame =
-      nextName.toLowerCase() === (result?.name ?? "").trim().toLowerCase();
+  const isSame =
+    nextName.toLowerCase() === (result?.name ?? "").trim().toLowerCase();
 
-    setStatus("loading");
+  setStatus("loading");
+  setResult(null); // <- clear previous result immediately so nothing shows while loading
 
-    const wikiImg = await fetchCharacterImage(nextName);
-    const avatarUrl = wikiImg ?? unknownAvatar(64);
-    const facts = await fetchCharacterFacts(nextName);
+  try {
+    // fetch image + facts in parallel, and only proceed when BOTH finish
+    const [imgUrl, facts] = await Promise.all([
+      (async () => {
+        const wikiImg = await fetchCharacterImage(nextName);
+        return wikiImg ?? unknownAvatar(64);
+      })(),
+      fetchCharacterFacts(nextName),
+    ]);
+
+    // normalize works to string[]
+    const worksArray = Array.isArray(facts?.notable_works)
+      ? (facts!.notable_works as string[])
+      : (facts?.notable_works
+          ? String(facts.notable_works)
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : []);
 
     setResult({
       name: nextName,
-      type: "Unknown",
-      avatarUrl,
+      type: "Fictional",
+      avatarUrl: imgUrl,
       facts: {
-        era: facts?.eraLabel ?? "Unknown",
-        occupation: facts?.occupations?.[0] ?? "N/A",
-        works: null,
-        firstAppearance: null,
+        background: facts?.background ?? "N/A",     // ← add this
+        era: facts?.era ?? "Unknown",
+        occupation: facts?.occupation ?? "N/A",
+        works: worksArray,
+        firstAppearance: facts?.first_appearance ?? "N/A",
       },
     });
 
-    if (!isSame) setChatKey((k) => k + 1); // clears both tabs by remounting ChatPanel
+    if (!isSame) setChatKey((k) => k + 1);
+  } catch (err) {
+    console.error("Search failed:", err);
+    // optional: show a toast here
+    setResult(null);
+  } finally {
     setStatus("done");
+  }
   };
+
 
   return (
     <main>

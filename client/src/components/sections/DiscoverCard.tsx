@@ -6,8 +6,8 @@ export type CharacterResult = {
   name: string;
   type?: "Fictional" | "Real" | "Unknown";
   avatarUrl?: string | null;
-  background?: string | null;
   facts?: {
+    background?: string | null;
     works?: string[] | null;
     occupation?: string | null;
     firstAppearance?: string | null;
@@ -100,7 +100,6 @@ function Result({ data }: { data: CharacterResult }) {
     name,
     type = "Fictional",
     avatarUrl,
-    background,
     facts,
     sourcesCount = 0,
   } = data;
@@ -183,7 +182,7 @@ function Result({ data }: { data: CharacterResult }) {
       {/* Background */}
       <h3 className="mt-6 text-sm font-semibold text-ink">Background</h3>
       <p className="mt-2 text-sm text-gray-700">
-        {background ??
+        {facts?.background ??
           `I don't have detailed information about "${name}" in my database. This could be a lesser-known figure or a spelling variation.`}
       </p>
 

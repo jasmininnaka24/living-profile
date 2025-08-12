@@ -5,6 +5,8 @@ from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 from openai import OpenAI
 import os, json
+from fastapi.middleware.cors import CORSMiddleware
+
 
 load_dotenv(override=True)
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -14,6 +16,16 @@ MODEL = "gpt-4o-mini"
 
 app = FastAPI(title="Character Profile API", version="1.0.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ----------------------------
 # Tool function (your Python)
@@ -65,7 +77,7 @@ get_character_profile_information_json = {
             },
             "era": {
                 "type": "string",
-                "description": "The historical or fictional time period in which the character lived or was most active, including the range of years. Strictly follow the format in the example.",
+                "description": "The historical or fictional time period in which the character lived or was most active, including the range of years. Strictly follow the format in the example: 19th Century (1879–1955)",
                 "example": "19th Century (1879–1955)",
             },
         },
