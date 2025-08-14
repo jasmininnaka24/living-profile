@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
+from typing import Any
 import os
 import json
 
@@ -30,20 +31,28 @@ app.add_middleware(
 )
 
 
-def get_character_profile_information(
-    background: str,
-    notable_works: str,
-    occupation: str,
-    first_appearance: str,
-    era: str,
-) -> Dict[str, Any]:
+def _to_text(value: Any, fallback: str) -> str:
+    # Accept list/str/None; normalize to concise string
+    if value is None:
+        return fallback
+    if isinstance(value, list):
+        return ", ".join(str(v).strip() for v in value if str(v).strip()) or fallback
+    s = str(value).strip()
+    return s or fallback
 
+def get_character_profile_information(
+    background: Any = None,
+    notable_works: Any = None,
+    occupation: Any = None,
+    first_appearance: Any = None,
+    era: Any = None,
+) -> Dict[str, Any]:
     return {
-        "background": background,
-        "notable_works": notable_works,
-        "occupation": occupation,
-        "first_appearance": first_appearance,
-        "era": era,
+        "background": _to_text(background, "N/A"),
+        "notable_works": _to_text(notable_works, "N/A"),
+        "occupation": _to_text(occupation, "N/A"),
+        "first_appearance": _to_text(first_appearance, "N/A"),
+        "era": _to_text(era, "Unknown"),
     }
 
 # JSON schema describing the tool for OpenAI
@@ -124,35 +133,57 @@ def handle_tool_calls(tool_calls) -> List[Dict[str, Any]]:
         "get_character_profile_information": get_character_profile_information,
     }
 
-    for tool_call in tool_calls:
-        tool_name = tool_call.function.name
-        args_json = tool_call.function.arguments or "{}"
-        try:
-            args = json.loads(args_json)
-        except json.JSONDecodeError:
+    for tc in tool_calls:
+        tool_name = getattr(tc.function, "name", None)
+        raw_args = getattr(tc.function, "arguments", {})  # may be str or dict or None
+
+        # Parse arguments safely
+        if isinstance(raw_args, str):
+            raw_args = raw_args.strip()
+            if not raw_args:
+                args = {}
+            else:
+                try:
+                    args = json.loads(raw_args)
+                except json.JSONDecodeError:
+                    args = {}
+        elif isinstance(raw_args, dict):
+            args = raw_args
+        else:
             args = {}
 
-        tool_function = registry.get(tool_name)
-        if not callable(tool_function):
+        tool_fn = registry.get(tool_name)
+        if not callable(tool_fn):
             results.append(
                 {
                     "role": "tool",
-                    "tool_call_id": tool_call.id,
+                    "tool_call_id": tc.id,
                     "content": json.dumps({"error": f"Tool '{tool_name}' not found"}),
                 }
             )
             continue
 
-        data = tool_function(**args)
+        # Optional: merge soft defaults before calling (tool also has its own fallbacks)
+        defaults = {
+            "background": None,
+            "notable_works": None,
+            "occupation": None,
+            "first_appearance": None,
+            "era": None,
+        }
+        safe_args = {**defaults, **(args or {})}
+
+        data = tool_fn(**safe_args)  # returns dict; now safe even with missing fields
         results.append(
             {
                 "role": "tool",
-                "tool_call_id": tool_call.id,
+                "tool_call_id": tc.id,
                 "content": json.dumps(data),
             }
         )
 
     return results
+
 
 def fetch_character_info(character_name: str, force_tool: bool = True) -> ToolData:
     messages = [
@@ -220,7 +251,7 @@ def chat(payload: ChatRequest):
         f"Use the provided info as ground truth when relevant. "
         f"Here's initial information: {info_json}. "
         f"If the user greets or asks something generic, respond naturally as {character_name} "
-        f"without saying 'I don't know'. If asked for unknown specifics, say 'I don't know' briefly "
+        f"If asked for unknown specifics, and you don't know the answer for it, just kindly say so."
         f"and suggest a related topic you can discuss."
     )
 
@@ -229,7 +260,7 @@ def chat(payload: ChatRequest):
         f"Be concise and accurate; use the provided info as ground truth. "
         f"Here's initial information: {info_json}. "
         f"If the user greets or asks something generic, give a brief friendly reply and offer a short "
-        f"summary about {character_name}. Only say 'I don't know' for specific facts that are not available."
+        f"summary about {character_name}. If asked for unknown specifics, and you don't know the answer for it, just kindly say so."
     )
 
     system_content = character_system_message if is_character else narrator_system_message
