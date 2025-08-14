@@ -19,12 +19,11 @@ MODEL = "gpt-4o-mini"
 app = FastAPI(title="Character Profile API", version="1.0.0")
 
 # Allow local dev frontends to call this API
+origins = os.getenv("CORS_ORIGINS", "").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
