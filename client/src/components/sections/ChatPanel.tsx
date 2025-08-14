@@ -1,7 +1,9 @@
 import Card from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { useEffect, useRef, useState } from "react";
+import { postChat } from "@/lib/postChat";
 
+const MAX_CONTEXT = 12;
 type ChatPanelProps = {
   character?: { name: string; avatarUrl?: string } | undefined;
   loading?: boolean; 
@@ -77,10 +79,11 @@ export default function ChatPanel({ character, loading }: ChatPanelProps) {
     URL.revokeObjectURL(url);
   }
 
-  const send = () => {
+  const send = async () => {
     const text = message.trim();
-    if (!text || !hasCharacter) return;
+    if (!text || !hasCharacter || typing) return;
 
+    // 1) add user bubble immediately
     const userMsg: Msg = {
       id: crypto.randomUUID(),
       role: "user",
@@ -90,15 +93,33 @@ export default function ChatPanel({ character, loading }: ChatPanelProps) {
     };
     setMessages((m) => [...m, userMsg]);
     setMessage("");
-
     setTyping(true);
 
-    setTimeout(() => {
+    try {
+      // 2) build lightweight history (only this tab), last N turns
+      const threadNow = [...messages.filter((m) => m.mode === mode), userMsg];
+      const recent = threadNow.slice(-MAX_CONTEXT);
+      const historyForApi = recent
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({
+          role: m.role,
+          content: m.role === "assistant" ? cleanAssistantText(m.text) : m.text,
+        }));
+
+      // 3) choose role for server
+      const roleForServer = mode === "in" ? character!.name : "Narrator";
+
+      // 4) call FastAPI /chat
+      const resp = await postChat({
+        character_name: character!.name,
+        role: roleForServer,
+        user_message: text,
+        history: historyForApi as any, // backend accepts "system|user|assistant|tool" but we only send user/assistant
+      });
+
+      // 5) append assistant reply
       const assistantName = mode === "in" ? character!.name : "Narrator";
-      const assistantText =
-        mode === "in"
-          ? `(${assistantName}) Thanks for your message.`
-          : `(${assistantName}) Here's a factual note.`;
+      const assistantText = `(${assistantName}) ${resp.assistant_text || ""}`.trim();
 
       const botMsg: Msg = {
         id: crypto.randomUUID(),
@@ -108,8 +129,19 @@ export default function ChatPanel({ character, loading }: ChatPanelProps) {
         mode,
       };
       setMessages((m) => [...m, botMsg]);
+    } catch (err) {
+      console.error("Chat error:", err);
+      const botMsg: Msg = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: "(System) Sorry, something went wrong while contacting the server.",
+        time: stamp(),
+        mode,
+      };
+      setMessages((m) => [...m, botMsg]);
+    } finally {
       setTyping(false);
-    }, 600);
+    }
   };
 
 

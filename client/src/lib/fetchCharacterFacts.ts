@@ -1,35 +1,45 @@
 // src/lib/fetchCharacterFacts.ts
-type Facts = {
+import { request } from "./api";
+
+export type Facts = {
   background: string;
-  notable_works: string;
+  notable_works: string | string[] | null; 
   occupation: string;
-  first_appearance: string;
+  first_appearance: string | null;
   era: string;
 };
 
-// Call your FastAPI character profile API
 export async function fetchCharacterFacts(name: string): Promise<Facts | null> {
+  const character_name = name.trim();
+  if (!character_name) return null;
+
   try {
-    const res = await fetch("http://127.0.0.1:8000/character", {
+    const data = await request<Facts>("/character", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        character_name: name,
-        force_tool: true
-      })
+      body: JSON.stringify({ character_name, force_tool: true }),
     });
 
-    if (!res.ok) return null;
+    // Normalize & add safe fallbacks
+    const background =
+      (data.background && data.background.trim()) || "N/A";
+    const occupation =
+      (data.occupation && data.occupation.trim()) || "N/A";
+    const first_appearance =
+      (data.first_appearance && String(data.first_appearance).trim()) || "N/A";
+    const era = (data.era && data.era.trim()) || "Unknown";
 
-    const data = await res.json();
+    // notable_works may be an array or a string; keep as-is (your Main handles both)
+    const notable_works =
+      Array.isArray((data as any).notable_works)
+        ? (data as any).notable_works
+        : (data.notable_works ?? "N/A");
 
-    // Ensure it has all required fields
     return {
-      background: data.background ?? "N/A",
-      notable_works: data.notable_works ?? "N/A",
-      occupation: data.occupation ?? "N/A",
-      first_appearance: data.first_appearance ?? "N/A",
-      era: data.era ?? "N/A"
+      background,
+      notable_works,
+      occupation,
+      first_appearance,
+      era,
     };
   } catch (err) {
     console.error("Error fetching character facts:", err);

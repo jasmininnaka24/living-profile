@@ -122,14 +122,14 @@ function Result({ data }: { data: CharacterResult }) {
           <h2 className="text-xl font-semibold text-ink">{data.name}</h2>
 
           {/* badge */}
-          <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+          {/* <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
             {data.type
                 ? data.type
                     .split(" ")
                     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
                     .join(" ")
                 : "N/A"}
-          </span>
+          </span> */}
         </div>
 
         {/* Era + Occupation row (this is the new bit) */}
